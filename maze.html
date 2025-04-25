@@ -2,6 +2,10 @@
 <html>
 
 <head>
+  <link rel="icon" href="data:image/svg+xml,
+    <svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22>
+      <text x=%2232%22 y=%2246%22 font-size=%2248%22 text-anchor=%22middle%22>☠️</text></svg>">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta charset="UTF-8">
   <title>Maze Game</title>
   <style>
@@ -16,6 +20,13 @@
       display: block;
       margin: auto;
       background: #111;
+    }
+
+    body {
+      font-family: sans-serif;
+      color: #fff;
+      text-align: center;
+      font-size: 20px;
     }
   </style>
 </head>
@@ -32,11 +43,17 @@
     let playerColor = '#fff', exitColor = '#0f0', wallColor = '#222', pathColor = '#444', cheatPathColor = '#00f';
     let playerSize = 0.8; // New variable for player size 
     let wallThickness = 2; // New variable for wall thickness
-    var ended = false;
+    let pathThickness = 2; // New variable for path thickness
+    let pathsize = 14; // New variable for path size
+    var ended = false; // New variable for ended state
+    let wincolor = '#fff530', wincolorgradient = '#0000ff'; // Win color
+    let losecolor = '#960000', losecolorgradient = '#000000'; // Lose color
+    let clock = '🕛'; // Clock emoji
+    let startTime = Date.now();
     function resize() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      cellSize = 20;
+      cellSize = 30;
       MAZE_WIDTH = Math.floor(canvas.width / cellSize);
       MAZE_HEIGHT = Math.floor(canvas.height / cellSize);
       generateMaze();
@@ -54,7 +71,6 @@
     function generateMaze() {
       maze = Array.from({ length: MAZE_HEIGHT }, () => Array(MAZE_WIDTH).fill(1));
       visitedPath = Array.from({ length: MAZE_HEIGHT }, () => Array(MAZE_WIDTH).fill(false));
-
       function carve(x, y) {
         maze[y][x] = 0;
         for (const [dx, dy] of shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
@@ -74,7 +90,6 @@
       gameOver = false;
       win = false;
       lose = false;
-      waveCounter = 0;
       solutionPath = [];
       autoMoving = false;
     }
@@ -86,7 +101,6 @@
           if (maze[y][x] === 0) candidates.push({ x, y });
         }
       }
-
       let start = candidates[Math.floor(Math.random() * candidates.length)];
       let end;
       let maxTry = 500;
@@ -96,7 +110,6 @@
         maxTry--;
         if (distance > (MAZE_WIDTH + MAZE_HEIGHT) / 1.5) break;
       } while (maxTry > 0);
-
       return [start, end];
     }
 
@@ -120,12 +133,10 @@
         player.x = nx;
         player.y = ny;
         visitedPath[ny][nx] = true;
-
         if (player.x === exit.x && player.y === exit.y) {
           win = true;
           gameOver = true;
         }
-
         if (countAvailableDirs(player.x, player.y) !== 1) {
           direction = null;
           autoMoving = false;
@@ -149,6 +160,7 @@
       if (!hasMove && !win) {
         gameOver = true;
         lose = true;
+        waveCounter--
       }
     }
 
@@ -158,76 +170,80 @@
       for (let y = 0; y < MAZE_HEIGHT; y++) {
         for (let x = 0; x < MAZE_WIDTH; x++) {
           if (maze[y][x] === 1) {
-            ctx.fillStyle = wallColor; //wall like bricswall sprite
-
-
-            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+            // Draw walls with thickness
+            ctx.fillStyle = wallColor;
+            ctx.fillRect(x * cellSize + wallThickness, y * cellSize + wallThickness, cellSize - wallThickness, cellSize - wallThickness);
           } else if (visitedPath[y][x]) {
+            //make transparent 50% path
             ctx.fillStyle = pathColor;
-            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+            ctx.font = `${pathsize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            ctx.fillText('👣', x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
           }
         }
       }
 
       for (let p of solutionPath) {
         ctx.fillStyle = cheatMode ? cheatPathColor : pathColor;
-        ctx.beginPath();  // Draw small dots on the solution path
-        ctx.arc(p.x * cellSize + cellSize / 2, p.y * cellSize + cellSize / 2, Math.random() * 5 + 2, 0, Math.PI * 2);
+        ctx.beginPath();  // Draw small dots on the solution path smaller
+        ctx.arc(p.x * cellSize + cellSize / 2, p.y * cellSize + cellSize / 2, pathThickness, 0, Math.PI * 2);
         ctx.fill();
       }
 
       ctx.fillStyle = exitColor; // Exit color
-      ctx.fillRect(exit.x * cellSize + (cellSize - cellSize * playerSize) / 2, exit.y * cellSize + (cellSize - cellSize * playerSize) / 2, cellSize * playerSize, cellSize * playerSize);
-      //ctx.fillRect(exit.x * cellSize, exit.y * cellSize, cellSize, cellSize);
-
-      ctx.fillStyle = '#f00'; // Player color
-      ctx.fillRect(player.x * cellSize + (cellSize - cellSize * playerSize) / 2, player.y * cellSize + (cellSize - cellSize * playerSize) / 2, cellSize * playerSize, cellSize * playerSize);
-      //ctx.fillRect(player.x * cellSize, player.y * cellSize, cellSize, cellSize);
-
+      //exit pixel castle emoji 🏰
+      ctx.font = `${cellSize}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🏰', exit.x * cellSize + cellSize / 2, exit.y * cellSize + cellSize / 2); // Draw exit as castle emoj
+      //player pixel skull emoji 💀
+      ctx.fillStyle = playerColor; // Player color
+      ctx.font = `${cellSize}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('💀', player.x * cellSize + cellSize / 2, player.y * cellSize + cellSize / 2); // Draw player as skull emoj
       if (win || lose) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; // Semi-transparent overlay
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // Semi-transparent overlay
-        //fireworks animation if win 
-
         if (win) {
-          // Add fireworks animation logic here
-          ctx.fillStyle = 'rgba(255, 255, 0, 0.8)'; // Fireworks color
-          ctx.beginPath();
-          // Fireworks logic like rocket brom bottom of screen up and explode at the top of the screen
-          for (let i = 0; i < 100; i++) {
-            let x = Math.random() * canvas.width;
-            let y = Math.random() * canvas.height;
-            ctx.moveTo(x, y);
-            ctx.arc(x, y, Math.random() * 5 + 2, 0, Math.PI * 2);
-          }
-          ctx.fill();
+          let gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+          gradient.addColorStop(0, wincolor);
+          gradient.addColorStop(1, wincolorgradient);
+          ctx.fillStyle = gradient;
+
+
         } else {
-          // Add lose animation logic here (e.g., shaking effect)
-          ctx.fillStyle = 'rgba(255, 0, 0, 0.8)'; // Lose color
-          ctx.beginPath();
-          for (let i = 0; i < 100; i++) {
-            let x = Math.random() * canvas.width;
-            let y = Math.random() * canvas.height;
-            ctx.moveTo(x, y);
-            ctx.arc(x, y, Math.random() * 5 + 2, 0, Math.PI * 2);
-          }
-          ctx.fill();
+          let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+          gradient.addColorStop(0, losecolor);
+          gradient.addColorStop(1, losecolorgradient);
+          ctx.fillStyle = gradient;
         }
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        waveCounter++;
-
-
-        ctx.fillStyle = '#fff'; // Text color
+        ctx.fillStyle = '#fff';
         ctx.font = '48px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(win ? 'YOU WIN!' : 'YOU LOSE!', canvas.width / 2, canvas.height / 2); // Centered text
-        ctx.font = '24px sans-serif'; // Font size for elapsed time
-        ctx.textAlign = 'center'; // Centered text    
-        ctx.font = '24px sans-serif';
-        ctx.fillText('Press Enter or OK to Retry', canvas.width / 2, canvas.height / 2 + 100); // Centered text
-        ctx.fillText('Press C to Toggle Cheat Mode', canvas.width / 2, canvas.height / 2 + 130); // Centered text
-        
+        //3D EFECT MAZE ON SCREEN like in windows 98 pipes screen saver
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'; // Shadow color
+        ctx.shadowOffsetX = 20; // Shadow offset X
+        ctx.shadowOffsetY = 10; // Shadow offset Y
+        ctx.shadowBlur = 20; // Shadow blur
+        ctx.fillStyle = win ? wincolor : losecolor; // Text color
+        ctx.font = 'bold 48px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.textShadow = '0 0 10px #000, 0 0 20px #000, 0 0 30px #000, 0 0 40px #000, 0 0 50px #000, 0 0 60px #000, 0 0 70px #000';
+        if (cheatMode) {
+          ctx.fillText('Cheater!!!!', canvas.width / 2, canvas.height / 2 - 20);
+        } else {
+          ctx.fillText(win ? 'You Win!' : 'Game Over', canvas.width / 2, canvas.height / 2 - 20);
+        }
+        ctx.fillText('Press Enter or SPACE ', canvas.width / 2, canvas.height / 2 + 20);
+        ctx.fillText('Press H key for help', canvas.width / 2, canvas.height / 2 + 60);
       }
     }
 
@@ -239,7 +255,11 @@
 
     document.addEventListener('keydown', e => {
       if (gameOver && (e.key === 'Enter' || e.key === ' ')) {
+        if (win && !cheatMode) {
+          waveCounter++;
+        }
         generateMaze();
+        cheatMode = false;
         return;
       }
       if (['ArrowUp', 'w', 'W', '8'].includes(e.key)) startMove([0, -1]);
@@ -247,12 +267,24 @@
       if (['ArrowLeft', 'a', 'A', '4'].includes(e.key)) startMove([-1, 0]);
       if (['ArrowRight', 'd', 'D', '6'].includes(e.key)) startMove([1, 0]);
       if (e.key === 'Escape') gameOver = true;
-      if (e.key === 'Enter' && gameOver) {
+      if (e.key === 'h') {
+        showhelp();
+      }
+      if (e.ctrlKey) {
+        var c = e.which || e.keyCode;
+        if (c == 82) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+      if (e.key === 'Enter' && gameOver || e.key === 'r' && Date.now() - startTime < 10000 || e.key === 'R' && gameOver) {
         generateMaze();
       }
       if (e.key === 'c') {
         cheatMode = !cheatMode;  // Toggle cheat mode
-        revealSolutionPath();  // Reveal solution path if cheat mode is enabled
+        if (cheatMode) {
+          revealSolutionPath();  // Reveal solution path if cheat mode is enabled
+        }
       }
       // key presed if cheatmode enabled pres v to auto win move to win animated 
       if (cheatMode && e.key === 'v') {
@@ -298,33 +330,36 @@
         }
       }
     }
-    // Touch swipe controls
+
     let touchStartX = 0;
     let touchStartY = 0;
-    // Touch swipe controls
+
     canvas.addEventListener("touchstart", e => {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
+      if (!gameOver) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        return;
+      }
     });
-    //if game over and touch end event is fired then generate maze
+
     canvas.addEventListener("touchend", e => {
       if (gameOver) {
         generateMaze();
         return;
-      }
-    });
-    canvas.addEventListener("touchend", e => {
-      let dx = e.changedTouches[0].clientX - touchStartX;
-      console.log(dx);
-      let dy = e.changedTouches[0].clientY - touchStartY;
-      console.log(dy);
-      if (Math.abs(dx) < Math.abs(dy)) {
-        if (dy > 0) startMove([0, 1]);
-        else startMove([0, -1]);
-      } else if (dx > 0) {
-        startMove([1, 0]);
       } else {
-        startMove([-1, 0]);
+
+        let dx = e.changedTouches[0].clientX - touchStartX;
+        console.log(dx);
+        let dy = e.changedTouches[0].clientY - touchStartY;
+        console.log(dy);
+        if (Math.abs(dx) < Math.abs(dy)) {
+          if (dy > 0) startMove([0, 1]);
+          else startMove([0, -1]);
+        } else if (dx > 0) {
+          startMove([1, 0]);
+        } else {
+          startMove([-1, 0]);
+        }
       }
     });
     function startMove(dir) {
@@ -363,30 +398,50 @@
         }
       }
     }
-    //add timer function on game to score time
-    let startTime = Date.now();
     function updateTimer() {
+      if (gameOver && !ended || gameOver && win) {
+        startTime = Date.now();
+        return;
+      }
       if (!gameOver) {
         let elapsedTime = Math.floor((Date.now() - startTime) / 1000);
-        ctx.fillStyle = '#fff'; // Text color
-        ctx.font = '24px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('Time: ' + elapsedTime + 's', 10, 30); // Display time in the top left corner
+        if (elapsedTime.toString().split('').pop() === "0") {
+          clock = '🕛';
+        } else if (elapsedTime.toString().split('').pop() === "2") {
+          clock = '🕒';
+        } else if (elapsedTime.toString().split('').pop() === "5") {
+          clock = '🕕';
+        } else if (elapsedTime.toString().split('').pop() === "8") {
+          clock = '🕘';
+        }
+        if (Date.now() - startTime > 5000) {
+          ctx.fillStyle = '#fff'; // Text color
+          ctx.font = '14px sans-serif'; //disable scaling
+          ctx.textBaseline = 'top'; // Align text to the top
+          ctx.textAlign = 'left';
+          ctx.fillText(`${clock}${elapsedTime}`, 2, 7); // Display elapsed time
+        }
+        if (waveCounter !== 0) {
+          ctx.fillStyle = '#fff'; // Text color
+          ctx.font = '14px sans-serif'; //disable scaling
+          ctx.textBaseline = 'top'; // Align text to the top
+          ctx.textAlign = 'right';
+          ctx.fillText(`${waveCounter}👑`, canvas.width - 2, 7); // Display elapsed time
+        }
       }
     }
-    window.addEventListener('focus', () => {
-      // Resume game and timer
-      if (gameOver) {
-        startTime = Date.now() - (elapsedTime * 1000); // Adjust start time
-        gameOver = false; // Reset gameOver to false
-        gameLoop();
-      }
-    });
+    function showhelp() {
+      alert("Controls:\
+      \nArrow keys ⬆️⬅️⬇️➡️or WASD to move\
+      \nEnter or Space to restart\
+      \nR in first 5 secs to restart\
+      \nClick on the exit to reveal the solution path\
+      \nTouch the screen to move\
+      \nC to toggle cheat mode\
+      \nV to auto win in cheat mode\
+      \nH for help");
 
-    window.addEventListener('blur', () => {
-      gameOver = true; // Set gameOver to true to pause the game
-
-    });
+    }
 
     function gameLoop() {
       moveAuto();

@@ -1,6 +1,6 @@
 # my_games
 This is my personal games repo
-1. maze game
+1. ☠️MazeGAME
 
 # description
 This repo i store game projects that i have made or am making. It is a personal repo and you  can use my code for your own projects. I am not responsible for any damage or loss of data that may occur from using my code. Use at your own risk.
