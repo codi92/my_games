@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Maze Game</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    canvas {
+      display: block;
+      margin: auto;
+      background: #111;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="game"></canvas>
+  <script>
+    let canvas = document.getElementById('game');
+    let ctx = canvas.getContext('2d');
+    let MAZE_WIDTH, MAZE_HEIGHT, cellSize;
+    let maze = [], visitedPath = [], player = {}, exit = {};
+    let direction = null, gameOver = false, win = false, lose = false;
+    let waveCounter = 0, solutionPath = [], autoMoving = false, cheatMode = false;
+    let playerColor = '#fff', exitColor = '#0f0', wallColor = '#222', pathColor = '#444', cheatPathColor = '#00f';
+    let playerSize = 0.8; // New variable for player size 
+    let wallThickness = 2; // New variable for wall thickness
+    var ended = false;
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      cellSize = 20;
+      MAZE_WIDTH = Math.floor(canvas.width / cellSize);
+      MAZE_HEIGHT = Math.floor(canvas.height / cellSize);
+      generateMaze();
+    }
+    window.onresize = resize;
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function generateMaze() {
+      maze = Array.from({ length: MAZE_HEIGHT }, () => Array(MAZE_WIDTH).fill(1));
+      visitedPath = Array.from({ length: MAZE_HEIGHT }, () => Array(MAZE_WIDTH).fill(false));
+
+      function carve(x, y) {
+        maze[y][x] = 0;
+        for (const [dx, dy] of shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+          const nx = x + dx * 2;
+          const ny = y + dy * 2;
+          if (ny >= 0 && ny < MAZE_HEIGHT && nx >= 0 && nx < MAZE_WIDTH && maze[ny][nx] === 1) {
+            maze[y + dy][x + dx] = 0;
+            carve(nx, ny);
+          }
+        }
+      }
+
+      carve(Math.floor(MAZE_WIDTH / 2), Math.floor(MAZE_HEIGHT / 2));
+      [player, exit] = randomFarPositions();
+      visitedPath[player.y][player.x] = true;
+      direction = null;
+      gameOver = false;
+      win = false;
+      lose = false;
+      waveCounter = 0;
+      solutionPath = [];
+      autoMoving = false;
+    }
+
+    function randomFarPositions() {
+      let candidates = [];
+      for (let y = 0; y < MAZE_HEIGHT; y++) {
+        for (let x = 0; x < MAZE_WIDTH; x++) {
+          if (maze[y][x] === 0) candidates.push({ x, y });
+        }
+      }
+
+      let start = candidates[Math.floor(Math.random() * candidates.length)];
+      let end;
+      let maxTry = 500;
+      do {
+        end = candidates[Math.floor(Math.random() * candidates.length)];
+        const distance = Math.abs(start.x - end.x) + Math.abs(start.y - end.y);
+        maxTry--;
+        if (distance > (MAZE_WIDTH + MAZE_HEIGHT) / 1.5) break;
+      } while (maxTry > 0);
+
+      return [start, end];
+    }
+
+    function countAvailableDirs(x, y) {
+      let count = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        let nx = x + dx, ny = y + dy;
+        if (nx >= 0 && ny >= 0 && nx < MAZE_WIDTH && ny < MAZE_HEIGHT && maze[ny][nx] === 0 && !visitedPath[ny][nx]) {
+          count++;
+        }
+      }
+      return count;
+    }
+
+    function moveAuto() {
+      if (!direction || gameOver || !autoMoving) return;
+      const [dx, dy] = direction;
+      let nx = player.x + dx;
+      let ny = player.y + dy;
+      if (nx >= 0 && ny >= 0 && nx < MAZE_WIDTH && ny < MAZE_HEIGHT && maze[ny][nx] === 0 && !visitedPath[ny][nx]) {
+        player.x = nx;
+        player.y = ny;
+        visitedPath[ny][nx] = true;
+
+        if (player.x === exit.x && player.y === exit.y) {
+          win = true;
+          gameOver = true;
+        }
+
+        if (countAvailableDirs(player.x, player.y) !== 1) {
+          direction = null;
+          autoMoving = false;
+          checkLose();
+        }
+      } else {
+        direction = null;
+        autoMoving = false;
+        checkLose();
+      }
+    }
+
+    function checkLose() {
+      let hasMove = false;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        let nx = player.x + dx, ny = player.y + dy;
+        if (nx >= 0 && ny >= 0 && nx < MAZE_WIDTH && ny < MAZE_HEIGHT && maze[ny][nx] === 0 && !visitedPath[ny][nx]) {
+          hasMove = true;
+        }
+      }
+      if (!hasMove && !win) {
+        gameOver = true;
+        lose = true;
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let y = 0; y < MAZE_HEIGHT; y++) {
+        for (let x = 0; x < MAZE_WIDTH; x++) {
+          if (maze[y][x] === 1) {
+            ctx.fillStyle = wallColor; //wall like bricswall sprite
+
+
+            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+          } else if (visitedPath[y][x]) {
+            ctx.fillStyle = pathColor;
+            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+          }
+        }
+      }
+
+      for (let p of solutionPath) {
+        ctx.fillStyle = cheatMode ? cheatPathColor : pathColor;
+        ctx.beginPath();  // Draw small dots on the solution path
+        ctx.arc(p.x * cellSize + cellSize / 2, p.y * cellSize + cellSize / 2, Math.random() * 5 + 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = exitColor; // Exit color
+      ctx.fillRect(exit.x * cellSize + (cellSize - cellSize * playerSize) / 2, exit.y * cellSize + (cellSize - cellSize * playerSize) / 2, cellSize * playerSize, cellSize * playerSize);
+      //ctx.fillRect(exit.x * cellSize, exit.y * cellSize, cellSize, cellSize);
+
+      ctx.fillStyle = '#f00'; // Player color
+      ctx.fillRect(player.x * cellSize + (cellSize - cellSize * playerSize) / 2, player.y * cellSize + (cellSize - cellSize * playerSize) / 2, cellSize * playerSize, cellSize * playerSize);
+      //ctx.fillRect(player.x * cellSize, player.y * cellSize, cellSize, cellSize);
+
+      if (win || lose) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; // Semi-transparent overlay
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // Semi-transparent overlay
+        //fireworks animation if win 
+
+        if (win) {
+          // Add fireworks animation logic here
+          ctx.fillStyle = 'rgba(255, 255, 0, 0.8)'; // Fireworks color
+          ctx.beginPath();
+          // Fireworks logic like rocket brom bottom of screen up and explode at the top of the screen
+          for (let i = 0; i < 100; i++) {
+            let x = Math.random() * canvas.width;
+            let y = Math.random() * canvas.height;
+            ctx.moveTo(x, y);
+            ctx.arc(x, y, Math.random() * 5 + 2, 0, Math.PI * 2);
+          }
+          ctx.fill();
+        } else {
+          // Add lose animation logic here (e.g., shaking effect)
+          ctx.fillStyle = 'rgba(255, 0, 0, 0.8)'; // Lose color
+          ctx.beginPath();
+          for (let i = 0; i < 100; i++) {
+            let x = Math.random() * canvas.width;
+            let y = Math.random() * canvas.height;
+            ctx.moveTo(x, y);
+            ctx.arc(x, y, Math.random() * 5 + 2, 0, Math.PI * 2);
+          }
+          ctx.fill();
+        }
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        waveCounter++;
+
+
+        ctx.fillStyle = '#fff'; // Text color
+        ctx.font = '48px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(win ? 'YOU WIN!' : 'YOU LOSE!', canvas.width / 2, canvas.height / 2); // Centered text
+        ctx.font = '24px sans-serif'; // Font size for elapsed time
+        ctx.textAlign = 'center'; // Centered text    
+        ctx.font = '24px sans-serif';
+        ctx.fillText('Press Enter or OK to Retry', canvas.width / 2, canvas.height / 2 + 100); // Centered text
+        ctx.fillText('Press C to Toggle Cheat Mode', canvas.width / 2, canvas.height / 2 + 130); // Centered text
+        
+      }
+    }
+
+    function gameLoop() {
+      moveAuto();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    document.addEventListener('keydown', e => {
+      if (gameOver && (e.key === 'Enter' || e.key === ' ')) {
+        generateMaze();
+        return;
+      }
+      if (['ArrowUp', 'w', 'W', '8'].includes(e.key)) startMove([0, -1]);
+      if (['ArrowDown', 's', 'S', '2'].includes(e.key)) startMove([0, 1]);
+      if (['ArrowLeft', 'a', 'A', '4'].includes(e.key)) startMove([-1, 0]);
+      if (['ArrowRight', 'd', 'D', '6'].includes(e.key)) startMove([1, 0]);
+      if (e.key === 'Escape') gameOver = true;
+      if (e.key === 'Enter' && gameOver) {
+        generateMaze();
+      }
+      if (e.key === 'c') {
+        cheatMode = !cheatMode;  // Toggle cheat mode
+        revealSolutionPath();  // Reveal solution path if cheat mode is enabled
+      }
+      // key presed if cheatmode enabled pres v to auto win move to win animated 
+      if (cheatMode && e.key === 'v') {
+        //prevention multiple calls
+        if (autoMoving) return; // Prevent multiple calls to auto-move
+        // Start auto-move to win position  
+        autoMoving = true;
+        direction = null; // Stop auto-move in the current direction
+        let pathIndex = 0; // Index to track the current position in the solution path
+        function moveToWin() {//make smooth animation to win position
+          if (pathIndex < solutionPath.length) {
+            player.x = solutionPath[pathIndex].x;
+            player.y = solutionPath[pathIndex].y;
+            pathIndex++;
+            requestAnimationFrame(moveToWin);
+          } else {
+            win = true;
+            gameOver = true;
+          }
+        }
+        moveToWin(); // Start moving to the win position
+      }
+    });
+    function revealSolutionPath() {
+      let queue = [{ x: player.x, y: player.y, path: [] }];
+      let visited = Array.from({ length: MAZE_HEIGHT }, () => Array(MAZE_WIDTH).fill(false));
+      visited[player.y][player.x] = true;
+
+      while (queue.length > 0) {
+        let { x, y, path } = queue.shift();
+        if (x === exit.x && y === exit.y) {
+          solutionPath = [...path, { x, y }];
+          return;
+        }
+        for (let [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          let nx = x + dx, ny = y + dy;
+          if (nx >= 0 && ny >= 0 && nx < MAZE_WIDTH && ny < MAZE_HEIGHT) {
+            if (!visited[ny][nx] && maze[ny][nx] === 0) {
+              visited[ny][nx] = true;
+              queue.push({ x: nx, y: ny, path: [...path, { x, y }] });
+            }
+          }
+        }
+      }
+    }
+    // Touch swipe controls
+    let touchStartX = 0;
+    let touchStartY = 0;
+    // Touch swipe controls
+    canvas.addEventListener("touchstart", e => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    });
+    //if game over and touch end event is fired then generate maze
+    canvas.addEventListener("touchend", e => {
+      if (gameOver) {
+        generateMaze();
+        return;
+      }
+    });
+    canvas.addEventListener("touchend", e => {
+      let dx = e.changedTouches[0].clientX - touchStartX;
+      console.log(dx);
+      let dy = e.changedTouches[0].clientY - touchStartY;
+      console.log(dy);
+      if (Math.abs(dx) < Math.abs(dy)) {
+        if (dy > 0) startMove([0, 1]);
+        else startMove([0, -1]);
+      } else if (dx > 0) {
+        startMove([1, 0]);
+      } else {
+        startMove([-1, 0]);
+      }
+    });
+    function startMove(dir) {
+      direction = dir;
+      autoMoving = true;
+    }
+
+    canvas.onclick = function (e) {
+      let rect = canvas.getBoundingClientRect();
+      let mx = Math.floor((e.clientX - rect.left) / cellSize);
+      let my = Math.floor((e.clientY - rect.top) / cellSize);
+      if (mx === exit.x && my === exit.y) {
+        revealSolutionPath();
+      }
+    };
+
+    function revealSolutionPath() {
+      let queue = [{ x: player.x, y: player.y, path: [] }];
+      let visited = Array.from({ length: MAZE_HEIGHT }, () => Array(MAZE_WIDTH).fill(false));
+      visited[player.y][player.x] = true;
+
+      while (queue.length > 0) {
+        let { x, y, path } = queue.shift();
+        if (x === exit.x && y === exit.y) {
+          solutionPath = [...path, { x, y }];
+          return;
+        }
+        for (let [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          let nx = x + dx, ny = y + dy;
+          if (nx >= 0 && ny >= 0 && nx < MAZE_WIDTH && ny < MAZE_HEIGHT) {
+            if (!visited[ny][nx] && maze[ny][nx] === 0) {
+              visited[ny][nx] = true;
+              queue.push({ x: nx, y: ny, path: [...path, { x, y }] });
+            }
+          }
+        }
+      }
+    }
+    //add timer function on game to score time
+    let startTime = Date.now();
+    function updateTimer() {
+      if (!gameOver) {
+        let elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+        ctx.fillStyle = '#fff'; // Text color
+        ctx.font = '24px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Time: ' + elapsedTime + 's', 10, 30); // Display time in the top left corner
+      }
+    }
+    window.addEventListener('focus', () => {
+      // Resume game and timer
+      if (gameOver) {
+        startTime = Date.now() - (elapsedTime * 1000); // Adjust start time
+        gameOver = false; // Reset gameOver to false
+        gameLoop();
+      }
+    });
+
+    window.addEventListener('blur', () => {
+      gameOver = true; // Set gameOver to true to pause the game
+
+    });
+
+    function gameLoop() {
+      moveAuto();
+      draw();
+      updateTimer(); // Update timer on each frame
+      requestAnimationFrame(gameLoop);
+    }
+    resize();
+    gameLoop();
+  </script>
+</body>
+
+</html>
