@@ -35,7 +35,7 @@
   <canvas id="game"></canvas>
   <script>
     // Maze Game
-    // by Pavel with help from ChatGPT
+    // by Pavel with help from ChatGPT/Copilot
     // This is a simple maze game where the player navigates through a randomly generated maze to reach the exit.
     // Declare variables
     let canvas = document.getElementById('game'); // Get the canvas element
@@ -71,9 +71,9 @@
     let clock = '🕛';  // Clock emoji
 
     function resize() { // Resize the canvas to fit the window
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      cellSize = 30;
+      canvas.width = window.innerWidth,
+        canvas.height = window.innerHeight,
+        cellSize = 20;
       MAZE_WIDTH = Math.floor(canvas.width / cellSize);
       MAZE_HEIGHT = Math.floor(canvas.height / cellSize);
       generateMaze();
@@ -89,30 +89,32 @@
     }
 
     function generateMaze() { // Generate a new maze
+      if (gameOver && win && !lose && !cheatMode) { // Check if the game is over
+        waveCounter++; // Increment wave counter if the game is over
+      } else if (gameOver && lose && !cheatMode) { // Check if the game is over
+        waveCounter--; // Decrement wave counter if the game is not over
+      } else if (cheatMode) {
+        waveCounter = waveCounter; // Keep the wave counter if cheat mode is enabled
+        cheatMode = false; // Reset cheat mode
+      }; // Set ended flag if game is over
+
       maze = Array.from({ length: MAZE_HEIGHT }, () => Array(MAZE_WIDTH).fill(1));
       visitedPath = Array.from({ length: MAZE_HEIGHT }, () => Array(MAZE_WIDTH).fill(false));
       function carve(x, y) { // Carve out the maze using recursive backtracking
         maze[y][x] = 0;
         for (const [dx, dy] of shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
-          const nx = x + dx * 2;
-          const ny = y + dy * 2;
+          const nx = x + dx * 2, ny = y + dy * 2;
           if (ny >= 0 && ny < MAZE_HEIGHT && nx >= 0 && nx < MAZE_WIDTH && maze[ny][nx] === 1) {
             maze[y + dy][x + dx] = 0;
             carve(nx, ny);
           }
         }
       }
-
       carve(Math.floor(MAZE_WIDTH / 2), Math.floor(MAZE_HEIGHT / 2));
       [player, exit] = randomFarPositions();
-      // Init game state
       visitedPath[player.y][player.x] = true;
-      direction = null;
-      gameOver = false;
-      win = false;
-      lose = false;
+      direction = null, gameOver = false, win = false, lose = false, autoMoving = false;// Reset game state
       solutionPath = [];
-      autoMoving = false;
     }
 
     function randomFarPositions() { // Get random far positions for player and exit
@@ -122,9 +124,7 @@
           if (maze[y][x] === 0) candidates.push({ x, y });
         }
       }
-      let start = candidates[Math.floor(Math.random() * candidates.length)];
-      let end;
-      let maxTry = 500;
+      let start = candidates[Math.floor(Math.random() * candidates.length)], end, maxTry = 500;
       do {
         end = candidates[Math.floor(Math.random() * candidates.length)];
         const distance = Math.abs(start.x - end.x) + Math.abs(start.y - end.y);
@@ -148,56 +148,34 @@
     function moveAuto() { // Auto-move the player
       if (!direction || gameOver || !autoMoving) return; // Check if auto-move is enabled
       const [dx, dy] = direction; // Get the direction
-      let nx = player.x + dx; // Calculate the new x position
-      let ny = player.y + dy; // Calculate the new y position
+      let nx = player.x + dx, ny = player.y + dy; // Calculate the new x & y position
       if (nx >= 0 && ny >= 0 && nx < MAZE_WIDTH && ny < MAZE_HEIGHT && maze[ny][nx] === 0 && !visitedPath[ny][nx]) { // Check if the new position is valid
-        player.x = nx; // Update the x position
-        player.y = ny; // Update the y position
+        player.x = nx, player.y = ny; // Update the x & y position
         visitedPath[ny][nx] = true; // Mark the new position as visited
-        if (player.x === exit.x && player.y === exit.y) { //  Check if the player reached the exit
-          win = true;
-          gameOver = true;
-        }
-        if (countAvailableDirs(player.x, player.y) !== 1) { // Check if the player can move in multiple directions
-          direction = null;
-          autoMoving = false;
-          checkLose();
-        }
-      } else { // If the new position is invalid
-        direction = null;
-        autoMoving = false;
-        checkLose();
-      }
+        if (player.x === exit.x && player.y === exit.y) win = true, gameOver = true; // Check if the player reached the exit
+        if (countAvailableDirs(player.x, player.y) !== 1) direction = null, autoMoving = false, checkLose(); //
+      } else direction = null, autoMoving = false, checkLose();
+
     }
 
     function checkLose() { // Check if the player is stuck
       let hasMove = false;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { // Check all directions
         let nx = player.x + dx, ny = player.y + dy;
-        if (nx >= 0 && ny >= 0 && nx < MAZE_WIDTH && ny < MAZE_HEIGHT && maze[ny][nx] === 0 && !visitedPath[ny][nx]) {
-          hasMove = true;
-        }
+        if (nx >= 0 && ny >= 0 && nx < MAZE_WIDTH && ny < MAZE_HEIGHT && maze[ny][nx] === 0 && !visitedPath[ny][nx]) hasMove = true;
       }
-      if (!hasMove && !win) { // If the player can't move and hasn't won
-        gameOver = true;
-        lose = true;
-        waveCounter--
-      }
+      if (!hasMove && !win) gameOver = true, lose = true; // Set game over and lose flags
     }
 
     function draw() { // Draw the maze and player
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+      ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
       for (let y = 0; y < MAZE_HEIGHT; y++) { // Draw the maze
         for (let x = 0; x < MAZE_WIDTH; x++) { // Draw each cell
           if (maze[y][x] === 1) {
             ctx.fillStyle = wallColor;
             ctx.fillRect(x * cellSize + wallThickness, y * cellSize + wallThickness, cellSize - wallThickness, cellSize - wallThickness);
           } else if (visitedPath[y][x]) { // Draw the visited path
-            ctx.fillStyle = pathColor;
-            ctx.font = `${pathsize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            ctx.fillStyle = pathColor, ctx.font = `${pathsize}px Arial`, ctx.textAlign = 'center', ctx.textBaseline = 'middle';
             ctx.fillText('👣', x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
           }
         }
@@ -210,50 +188,31 @@
         ctx.fill();
       }
       ctx.fillStyle = exitColor;
-      ctx.font = `${cellSize}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.font = `${cellSize}px Arial`, ctx.textAlign = 'center', ctx.textBaseline = 'middle';
       ctx.fillText('🏰', exit.x * cellSize + cellSize / 2, exit.y * cellSize + cellSize / 2);
-      ctx.fillStyle = playerColor;
-      ctx.font = `${cellSize}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.fillStyle = playerColor, ctx.font = `${cellSize}px Arial`;
+      ctx.textAlign = 'center', ctx.textBaseline = 'middle';
       ctx.fillText('💀', player.x * cellSize + cellSize / 2, player.y * cellSize + cellSize / 2);
       if (win || lose) { // Draw the game over screen
         ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        if (win) { // If the player wins
-          let gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
-          gradient.addColorStop(0, wincolor);
-          gradient.addColorStop(1, wincolorgradient);
-          ctx.fillStyle = gradient;
-        } else { // If the player loses
-          let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-          gradient.addColorStop(0, losecolor);
-          gradient.addColorStop(1, losecolorgradient);
-          ctx.fillStyle = gradient;
-        }  // Draw the gradient
+        let gradient = ctx.createLinearGradient(0, win ? canvas.height : 0, 0, lose ? canvas.height : 0);
+        gradient.addColorStop(0, win ? wincolor : losecolor);
+        gradient.addColorStop(1, win ? wincolorgradient : losecolorgradient);
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#fff';
         ctx.font = '48px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowOffsetX = 20;
-        ctx.shadowOffsetY = 10;
-        ctx.shadowBlur = 20;
-        ctx.fillStyle = win ? wincolor : losecolor;
-        ctx.font = 'bold 48px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        ctx.shadowOffsetX = 20, ctx.shadowOffsetY = 10, ctx.shadowBlur = 20; // Shadow effect
+        ctx.fillStyle = win ? wincolor : losecolor; // Set color based on win or lose
+        ctx.font = 'bold 48px sans-serif', ctx.textAlign = 'center', ctx.textBaseline = 'middle'; // Center the text
         ctx.textShadow = '0 0 10px #000, 0 0 20px #000, 0 0 30px #000, 0 0 40px #000, 0 0 50px #000, 0 0 60px #000, 0 0 70px #000';
-        if (cheatMode) { // If cheat mode is enabled
-          ctx.fillText('Cheater!!!!', canvas.width / 2, canvas.height / 2 - 20);
-        } else { // If cheat mode is not enabled
-          ctx.fillText(win ? 'You Win!' : 'Game Over', canvas.width / 2, canvas.height / 2 - 20);
-        } 
-        ctx.fillText('Press Enter or SPACE ', canvas.width / 2, canvas.height / 2 + 20);
+        ctx.fillText(cheatMode ? 'Cheater!!!' : win ? 'You Win!' : 'Game Over', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.fillText('Press Enter or SPACE', canvas.width / 2, canvas.height / 2 + 20);
         ctx.fillText('Press H key for help', canvas.width / 2, canvas.height / 2 + 60);
       }
     }
@@ -265,40 +224,37 @@
     }
 
     document.addEventListener('keydown', e => { // Keydown event
-      if (gameOver && (e.key === 'Enter' || e.key === ' ')) {
-        if (win && !cheatMode) { // If the player wins and cheat mode is not enabled
-          waveCounter++;
-        }
+      if (gameOver && (e.key === 'Enter' || e.key === ' ')) { // Restart the game
         generateMaze();
-        cheatMode = false;
         return;
       }
-      if (['ArrowUp', 'w', 'W', '8'].includes(e.key)) startMove([0, -1]); // Move up
-      if (['ArrowDown', 's', 'S', '2'].includes(e.key)) startMove([0, 1]); // Move down
-      if (['ArrowLeft', 'a', 'A', '4'].includes(e.key)) startMove([-1, 0]); // Move left
-      if (['ArrowRight', 'd', 'D', '6'].includes(e.key)) startMove([1, 0]); // Move right
+      if ([38, 87, 104].includes(e.keyCode)) startMove([0, -1]); // Move up
+      if ([40, 83, 98].includes(e.keyCode)) startMove([0, 1]); // Move down
+      if ([37, 65, 100].includes(e.keyCode)) startMove([-1, 0]); // Move left
+      if ([39, 68, 102].includes(e.keyCode)) startMove([1, 0]); // Move right
       if (e.key === 'Escape') gameOver = true; // Pause the game
-      if (e.key === 'h') { // Show help message
-        showhelp();
-      }
+      if (e.key === 'h') showhelp(); // Show help message
       if (e.ctrlKey) { // Disable Ctrl+R
-        var c = e.which || e.keyCode; 
-        if (c == 82) { // Ctrl+R
+        var c = e.which || e.keyCode;
+        if (c == 82) {
           e.preventDefault();
           e.stopPropagation();
         }
       }
-      if (e.key === 'Enter' && gameOver || e.key === 'r' && 
-       Date.now() - startTime < 10000 || e.key === 'R' && gameOver) { // Restart the game
+      if (e.keyCode === 37 && gameOver
+        || e.key === '5' && gameOver
+        || e.keyCode === 32 && gameOver
+        || e.key === 'r' && Date.now() - startTime < 10000
+        || e.key === 'r' && gameOver
+        || e.keyCode === 12 && gameOver) { // Restart the game
         generateMaze();
       }
-      if (e.key === 'c') { // Toggle cheat mode
-        cheatMode = !cheatMode;
-        if (cheatMode) { // If cheat mode is enabled
-          revealSolutionPath();
-        }
+      if (e.keyCode === 67) { // Enable cheat mode
+        cheatMode = true;
+        revealSolutionPath();
       }
-      if (cheatMode && e.key === 'v') { // Auto win in cheat mode
+
+      if (cheatMode && e.keyCode === 86) { // Auto win in cheat mode
         if (autoMoving) return;
         autoMoving = true;
         direction = null;
@@ -324,7 +280,7 @@
 
       while (queue.length > 0) {// BFS to find the solution path
         let { x, y, path } = queue.shift();
-        if (x === exit.x && y === exit.y) {
+        if (x === exit.x && y === exit.y) { // Check if the exit is reached
           solutionPath = [...path, { x, y }];
           return;
         }
@@ -332,17 +288,14 @@
           let nx = x + dx, ny = y + dy;
           if (nx >= 0 && ny >= 0 && nx < MAZE_WIDTH && ny < MAZE_HEIGHT) { // Check if the new position is valid
             if (!visited[ny][nx] && maze[ny][nx] === 0) { // Check if the new position is a path
-              visited[ny][nx] = true;
+              visited[ny][nx] = true;// Mark the new position as visited
               queue.push({ x: nx, y: ny, path: [...path, { x, y }] });
             } // Check if the new position is valid
           }
         }
       }
     }
-
-    let touchStartX = 0;
-    let touchStartY = 0;
-
+    let touchStartX, touchStartY = 0;
     canvas.addEventListener("touchstart", e => { // Touch start event
       if (!gameOver) {
         touchStartX = e.touches[0].clientX;
@@ -370,6 +323,7 @@
         }
       }
     });
+    
     function startMove(dir) { // Start moving the player
       direction = dir;
       autoMoving = true;
@@ -423,18 +377,12 @@
           clock = '🕘';
         }
         if (Date.now() - startTime > 5000) {
-          ctx.fillStyle = '#fff'; // Text color
-          ctx.font = '14px sans-serif'; //disable scaling
-          ctx.textBaseline = 'top'; // Align text to the top
-          ctx.textAlign = 'left';
+          ctx.fillStyle = '#fff', ctx.font = '14px sans-serif', ctx.textBaseline = 'top', ctx.textAlign = 'left';
           ctx.fillText(`${clock}${elapsedTime}`, 2, 7); // Display elapsed time
         }
         if (waveCounter !== 0) {
-          ctx.fillStyle = '#fff'; // Text color
-          ctx.font = '14px sans-serif'; //disable scaling
-          ctx.textBaseline = 'top'; // Align text to the top
-          ctx.textAlign = 'right';
-          ctx.fillText(`${waveCounter}👑`, canvas.width - 2, 7); // Display elapsed time
+          ctx.fillStyle = '#fff', ctx.font = '14px sans-serif', ctx.textBaseline = 'top', ctx.textAlign = 'right';
+          ctx.fillText(`${waveCounter}👑`, canvas.width - 2, 7); // Display wave Score
         }
       }
     }
@@ -452,10 +400,10 @@
     }
 
     function gameLoop() { // Main game loop
-      moveAuto();
-      draw();
+      moveAuto();// Move the player
+      draw();// Draw the maze and player
       updateTimer(); // Update timer on each frame
-      requestAnimationFrame(gameLoop);
+      requestAnimationFrame(gameLoop);// Request the next frame
     }
     resize();
     gameLoop();
