@@ -4,8 +4,18 @@
   <meta charset="UTF-8">
   <title>Tetris Touch</title>
   <style>
-    html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
-    canvas { display: block; margin: auto; background: #111; touch-action: none; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      margin: auto;
+      background: #111;
+      touch-action: none;
+    }
   </style>
 </head>
 <body>
@@ -15,210 +25,252 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-const COLS = 10, ROWS = 20, NEXT_SIZE = 6;
-let BLOCK = 30;
-let grid, current, next, dropTime, gameOver;
+// Game settings
+const COLS = 10, ROWS = 20, NEXT_BOX_SIZE = 6;
+let BLOCK_SIZE = 30;
+let score = 0, linesCleared = 0, level = 1, dropInterval = 1000;
+let dropTime = 0, gameOver = false;
+let grid, currentPiece, nextPiece;
 let touchStartX = 0, touchStartY = 0;
 
-const colors = [
-  '#000', '#0ff', '#00f', '#f0f', '#0f0', '#f00', '#ff0', '#fa0'
-];
-
+const colors = ['#000', '#0ff', '#00f', '#f0f', '#0f0', '#f00', '#ff0', '#fa0'];
 const shapes = [
-  [[1,1,1,1]],                         // I
-  [[1,1,0],[0,1,1]],                   // Z
-  [[0,1,1],[1,1,0]],                   // S
-  [[1,1],[1,1]],                       // O
-  [[1,0,0],[1,1,1]],                   // J
-  [[0,0,1],[1,1,1]],                   // L
-  [[0,1,0],[1,1,1]]                    // T
+  [[1, 1, 1, 1]], // I
+  [[1, 1, 0], [0, 1, 1]], // Z
+  [[0, 1, 1], [1, 1, 0]], // S
+  [[1, 1], [1, 1]], // O
+  [[1, 0, 0], [1, 1, 1]], // J
+  [[0, 0, 1], [1, 1, 1]], // L
+  [[0, 1, 0], [1, 1, 1]] // T
 ];
 
-function resize() {
+// --- Game Initialization ---
+function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  BLOCK = Math.min(canvas.height / ROWS, canvas.width / (COLS + NEXT_SIZE + 2));
+  BLOCK_SIZE = Math.min(canvas.height / ROWS, canvas.width / (COLS + NEXT_BOX_SIZE + 2));
 }
-window.onresize = resize;
 
-function reset() {
-  grid = Array.from({length: ROWS}, () => Array(COLS).fill(0));
-  current = randomPiece();
-  next = randomPiece();
+function resetGame() {
+  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  currentPiece = generateRandomPiece();
+  nextPiece = generateRandomPiece();
   dropTime = Date.now();
   gameOver = false;
+  score = 0;
+  linesCleared = 0;
+  level = 1;
 }
 
-function randomPiece() {
-  let id = Math.floor(Math.random() * shapes.length) + 1;
-  let shape = shapes[id-1];
-  return {shape, x: Math.floor(COLS/2) - Math.ceil(shape[0].length/2), y: -1, id};
+function generateRandomPiece() {
+  const id = Math.floor(Math.random() * shapes.length) + 1;
+  const shape = shapes[id - 1];
+  return {
+    shape,
+    id,
+    x: Math.floor(COLS / 2) - Math.ceil(shape[0].length / 2),
+    y: -1
+  };
 }
 
-function collide(p) {
-  for (let y = 0; y < p.shape.length; y++) {
-    for (let x = 0; x < p.shape[y].length; x++) {
-      if (p.shape[y][x]) {
-        let newX = p.x + x;
-        let newY = p.y + y;
-        if (newX < 0 || newX >= COLS || newY >= ROWS) return true;
-        if (newY >= 0 && grid[newY][newX]) return true;
+// --- Game Logic ---
+function collide(piece) {
+  for (let y = 0; y < piece.shape.length; y++) {
+    for (let x = 0; x < piece.shape[y].length; x++) {
+      if (piece.shape[y][x]) {
+        const nx = piece.x + x;
+        const ny = piece.y + y;
+        if (nx < 0 || nx >= COLS || ny >= ROWS || (ny >= 0 && grid[ny][nx])) return true;
       }
     }
   }
   return false;
 }
 
-function merge(p) {
-  for (let y = 0; y < p.shape.length; y++) {
-    for (let x = 0; x < p.shape[y].length; x++) {
-      if (p.shape[y][x]) {
-        let newX = p.x + x;
-        let newY = p.y + y;
-        if (newY >= 0) grid[newY][newX] = p.id;
-      }
-    }
-  }
+function mergePiece(piece) {
+  piece.shape.forEach((row, y) => {
+    row.forEach((val, x) => {
+      if (val && piece.y + y >= 0) grid[piece.y + y][piece.x + x] = piece.id;
+    });
+  });
 }
 
-function rotate(p) {
-  let newShape = p.shape[0].map((_, i) => p.shape.map(row => row[i]).reverse());
-  return {shape: newShape, x: p.x, y: p.y, id: p.id};
+function rotatePiece(piece) {
+  const rotated = piece.shape[0].map((_, i) => piece.shape.map(row => row[i]).reverse());
+  return { ...piece, shape: rotated };
 }
 
-function move(dx) {
-  let temp = {...current, x: current.x + dx};
-  if (!collide(temp)) current = temp;
+function movePiece(dx) {
+  const moved = { ...currentPiece, x: currentPiece.x + dx };
+  if (!collide(moved)) currentPiece = moved;
 }
 
-function drop() {
-  if (gameOver) return;
-  let temp = {...current, y: current.y + 1};
-  if (!collide(temp)) {
-    current = temp;
+function dropPiece() {
+  const moved = { ...currentPiece, y: currentPiece.y + 1 };
+  if (!collide(moved)) {
+    currentPiece = moved;
   } else {
-    merge(current);
+    mergePiece(currentPiece);
     clearLines();
-    current = next;
-    next = randomPiece();
-    if (collide(current)) {
-      gameOver = true;
-    }
+    currentPiece = nextPiece;
+    nextPiece = generateRandomPiece();
+    if (collide(currentPiece)) gameOver = true;
   }
   dropTime = Date.now();
 }
 
 function hardDrop() {
-  while (!collide({...current, y: current.y+1})) {
-    current.y++;
-  }
-  drop();
+  while (!collide({ ...currentPiece, y: currentPiece.y + 1 })) currentPiece.y++;
+  dropPiece();
 }
 
 function clearLines() {
-  let newGrid = grid.filter(row => row.some(cell => !cell));
-  while (newGrid.length < ROWS) newGrid.unshift(Array(COLS).fill(0));
-  grid = newGrid;
+  let cleared = 0;
+  grid = grid.filter(row => {
+    if (row.every(cell => cell)) {
+      cleared++;
+      return false;
+    }
+    return true;
+  });
+
+  while (grid.length < ROWS) grid.unshift(Array(COLS).fill(0));
+
+  if (cleared > 0) {
+    linesCleared += cleared;
+    level = Math.floor(linesCleared / 10) + 1;
+    score += [0, 40, 100, 300, 1200][cleared] * level;
+  }
 }
 
-function ghostPiece() {
-  let ghost = {...current};
-  while (!collide({...ghost, y: ghost.y + 1})) ghost.y++;
+function getGhostPiece() {
+  const ghost = { ...currentPiece };
+  while (!collide({ ...ghost, y: ghost.y + 1 })) ghost.y++;
   return ghost;
 }
 
-function drawSquare(x, y, id, alpha=1) {
+// --- Drawing ---
+function drawSquare(x, y, id, alpha = 1) {
   ctx.globalAlpha = alpha;
   ctx.fillStyle = colors[id];
-  ctx.fillRect(x * BLOCK, y * BLOCK, BLOCK - 1, BLOCK - 1);
+  ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
   ctx.globalAlpha = 1;
 }
 
-function draw() {
+function drawGame() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  for (let y = 0; y < ROWS; y++)
-    for (let x = 0; x < COLS; x++)
-      if (grid[y][x]) drawSquare(x, y, grid[y][x]);
+  // Grid
+  grid.forEach((row, y) => {
+    row.forEach((id, x) => {
+      if (id) drawSquare(x, y, id);
+    });
+  });
 
-  let ghost = ghostPiece();
-  for (let y = 0; y < ghost.shape.length; y++)
-    for (let x = 0; x < ghost.shape[y].length; x++)
-      if (ghost.shape[y][x])
-        drawSquare(ghost.x + x, ghost.y + y, ghost.id, 0.3);
+  // Ghost
+  const ghost = getGhostPiece();
+  ghost.shape.forEach((row, y) => {
+    row.forEach((val, x) => {
+      if (val) drawSquare(ghost.x + x, ghost.y + y, ghost.id, 0.3);
+    });
+  });
 
-  for (let y = 0; y < current.shape.length; y++)
-    for (let x = 0; x < current.shape[y].length; x++)
-      if (current.shape[y][x])
-        drawSquare(current.x + x, current.y + y, current.id);
+  // Current
+  currentPiece.shape.forEach((row, y) => {
+    row.forEach((val, x) => {
+      if (val) drawSquare(currentPiece.x + x, currentPiece.y + y, currentPiece.id);
+    });
+  });
 
-  for (let y = 0; y < next.shape.length; y++)
-    for (let x = 0; x < next.shape[y].length; x++)
-      if (next.shape[y][x])
-        drawSquare(COLS + 2 + x, 2 + y, next.id);
+  // Border
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, COLS * BLOCK_SIZE, ROWS * BLOCK_SIZE);
 
+  // Next Box
+  const nextX = (COLS + 2) * BLOCK_SIZE;
+  const nextY = BLOCK_SIZE;
+  const nextSize = 4 * BLOCK_SIZE;
+  ctx.strokeRect(nextX, nextY, nextSize, nextSize);
+
+  const shape = nextPiece.shape;
+  const offsetX = Math.floor((4 - shape[0].length) / 2);
+  const offsetY = 4 - shape.length;
+
+  shape.forEach((row, y) => {
+    row.forEach((val, x) => {
+      if (val) drawSquare(COLS + 2 + offsetX + x, 1 + offsetY + y, nextPiece.id);
+    });
+  });
+
+  // Score Box
+  const scoreY = nextY + nextSize + BLOCK_SIZE;
+  ctx.strokeRect(nextX, scoreY, nextSize, BLOCK_SIZE * 2);
   ctx.fillStyle = "#fff";
-  ctx.font = (BLOCK * 0.7) + "px Arial";
-  ctx.fillText("NEXT:", (COLS + 2) * BLOCK, BLOCK * 1.5);
+  ctx.font = `${BLOCK_SIZE * 0.6}px Arial`;
+  ctx.fillText("SCORE", nextX + 10, scoreY + BLOCK_SIZE * 0.7);
+  ctx.fillText(score.toString(), nextX + 10, scoreY + BLOCK_SIZE * 1.6);
 
+  // Game Over
   if (gameOver) {
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#fff";
     ctx.font = "48px Arial";
     ctx.textAlign = "center";
-    ctx.fillText("GAME OVER", canvas.width/2, canvas.height/2);
+    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
     ctx.font = "24px Arial";
-    ctx.fillText("Tap or Press Enter to Restart", canvas.width/2, canvas.height/2 + 50);
+    ctx.fillText("Tap or Press Enter to Restart", canvas.width / 2, canvas.height / 2 + 50);
   }
 }
 
+// --- Controls ---
 document.addEventListener('keydown', e => {
-  if (gameOver && e.key === 'Enter') reset();
+  if (gameOver && e.key === 'Enter') return resetGame();
   if (gameOver) return;
-  if (e.key === 'ArrowLeft') move(-1);
-  else if (e.key === 'ArrowRight') move(1);
-  else if (e.key === 'ArrowDown') drop();
+
+  if (e.key === 'ArrowLeft') movePiece(-1);
+  else if (e.key === 'ArrowRight') movePiece(1);
+  else if (e.key === 'ArrowDown') dropPiece();
   else if (e.key === 'ArrowUp') {
-    let rotated = rotate(current);
-    if (!collide(rotated)) current = rotated;
-  }
-  else if (e.key === ' ') hardDrop();
+    const rotated = rotatePiece(currentPiece);
+    if (!collide(rotated)) currentPiece = rotated;
+  } else if (e.key === ' ') hardDrop();
 });
 
 canvas.addEventListener('touchstart', e => {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
+  const t = e.touches[0];
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
 });
 
 canvas.addEventListener('touchend', e => {
-  if (gameOver) {
-    reset();
-    return;
-  }
-  let dx = e.changedTouches[0].clientX - touchStartX;
-  let dy = e.changedTouches[0].clientY - touchStartY;
+  if (gameOver) return resetGame();
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
   if (Math.abs(dx) > Math.abs(dy)) {
-    if (dx > 30) move(1);
-    else if (dx < -30) move(-1);
+    if (dx > 30) movePiece(1);
+    else if (dx < -30) movePiece(-1);
   } else {
-    if (dy > 30) drop();
+    if (dy > 30) dropPiece();
     else if (dy < -30) {
-      let rotated = rotate(current);
-      if (!collide(rotated)) current = rotated;
+      const rotated = rotatePiece(currentPiece);
+      if (!collide(rotated)) currentPiece = rotated;
     }
   }
 });
 
-function update() {
-  if (!gameOver && Date.now() - dropTime > 500) drop();
-  draw();
-  requestAnimationFrame(update);
+// --- Game Loop ---
+function updateGame() {
+  if (!gameOver && Date.now() - dropTime > dropInterval) dropPiece();
+  drawGame();
+  requestAnimationFrame(updateGame);
 }
 
-resize();
-reset();
-update();
+window.onresize = resizeCanvas;
+resizeCanvas();
+resetGame();
+updateGame();
 </script>
 </body>
 </html>
